@@ -1,0 +1,940 @@
+Below is a V2 Markdown specification that extends the V1 toolbox into a 24/7 autonomous agent system while preserving the same Unix philosophy:
+	•	every tool = single purpose
+	•	stdin → stdout
+	•	JSON / JSONL
+	•	inspectable state
+	•	composable pipelines
+
+Tool names follow your rule: single word, 3–5 characters, no dashes.
+
+⸻
+
+Clock V2 — Autonomous Agent Toolbox
+
+Clock V2 transforms the V1 interactive assistant into a continuous autonomous system capable of operating indefinitely.
+
+The design follows strict Unix principles:
+	•	Small tools
+	•	Explicit inputs and outputs
+	•	Stateless execution where possible
+	•	Durable state stored in .clock/
+	•	Pipelines instead of monoliths
+
+All tools communicate via JSON or JSONL.
+
+⸻
+
+Tool Index
+
+V1 Core Toolbox
+
+scan
+scope
+srch
+slce
+pack
+map
+ctrt
+flow
+doss
+rfrsh
+llm
+act
+guard
+aply
+vrfy
+undo
+rpt
+
+V1 Go Microtools
+
+jolt
+budg
+anch
+risk
+exec
+dect
+graf
+trce
+mcp
+
+V2 Autonomous System Tools
+
+dock
+tick
+watch
+q
+job
+work
+mem
+eval
+aprv
+push
+lease
+mode
+
+
+⸻
+
+Autonomous Tools
+
+These tools enable Clock to operate continuously and autonomously.
+
+⸻
+
+dock
+
+Purpose
+
+Clock daemon.
+
+Goal
+
+Provide the long-running process that supervises the autonomous system.
+
+How it works
+	•	loads .clock/config
+	•	initializes workers
+	•	launches watchers
+	•	manages queue consumers
+	•	enforces resource limits
+	•	records traces
+
+It does not contain agent logic, only orchestration.
+
+Input
+
+JSON config:
+
+{
+  "root": ".",
+  "workers": 4,
+  "queue": ".clock/q.db"
+}
+
+Output
+
+JSON events describing system activity.
+
+⸻
+
+tick
+
+Purpose
+
+Scheduler.
+
+Goal
+
+Trigger jobs based on time.
+
+How it works
+
+Reads schedule definitions and emits job events.
+
+Examples:
+	•	nightly maintenance
+	•	dependency audits
+	•	repository scans
+
+Input
+
+{
+  "tasks": [
+    { "name": "audit", "cron": "0 2 * * *" }
+  ]
+}
+
+Output
+
+JSON job events:
+
+{
+  "type": "schedule",
+  "task": "audit"
+}
+
+
+⸻
+
+watch
+
+Purpose
+
+Event watcher.
+
+Goal
+
+Detect external changes that should trigger jobs.
+
+Sources
+	•	git commits
+	•	pull requests
+	•	CI failures
+	•	filesystem changes
+	•	webhook events
+
+Input
+
+{
+  "repo": ".",
+  "events": ["git", "ci"]
+}
+
+Output
+
+JSONL events:
+
+{
+  "type": "git.push",
+  "repo": "...",
+  "branch": "main"
+}
+
+
+⸻
+
+q
+
+Purpose
+
+Durable job queue.
+
+Goal
+
+Store pending work reliably.
+
+How it works
+
+Supports:
+	•	enqueue
+	•	lease
+	•	acknowledge
+	•	retry
+	•	dead-letter
+
+Input
+
+Commands:
+
+put
+take
+ack
+fail
+
+Example enqueue:
+
+{
+  "goal": "fix failing tests",
+  "repo": "."
+}
+
+Output
+
+JSON job records.
+
+⸻
+
+job
+
+Purpose
+
+Event-to-job compiler.
+
+Goal
+
+Convert events into executable tasks.
+
+How it works
+
+Matches event patterns against rules.
+
+Example:
+
+CI failure → investigate and propose fix
+
+Input
+
+Event JSON.
+
+Output
+
+Job specification:
+
+{
+  "goal": "repair CI failure",
+  "scope": ["src"],
+  "priority": "high"
+}
+
+
+⸻
+
+work
+
+Purpose
+
+Worker executor.
+
+Goal
+
+Run the full agent loop for a job.
+
+How it works
+	1.	fetch job from queue
+	2.	load dossier
+	3.	run retrieval loop
+	4.	apply patch
+	5.	verify
+	6.	produce result
+
+Input
+
+Job JSON.
+
+Output
+
+Result artifact JSON.
+
+⸻
+
+mem
+
+Purpose
+
+Durable knowledge store.
+
+Goal
+
+Persist useful system knowledge.
+
+Stores
+	•	repository fingerprints
+	•	successful fixes
+	•	command heuristics
+	•	dossier history
+	•	playbooks
+
+Input
+
+Structured entries.
+
+Output
+
+Query results.
+
+⸻
+
+eval
+
+Purpose
+
+Plan safety evaluator.
+
+Goal
+
+Prevent dangerous autonomous behavior.
+
+How it works
+
+Scores proposed actions for risk.
+
+Examples of checks:
+	•	touching migration files
+	•	editing dependency manifests
+	•	large refactors
+
+Input
+
+{
+  "diff": "...",
+  "context": "..."
+}
+
+Output
+
+{
+  "risk": 0.82,
+  "class": "high",
+  "requires": "approval"
+}
+
+
+⸻
+
+aprv
+
+Purpose
+
+Human approval gateway.
+
+Goal
+
+Enable safe human oversight.
+
+Modes
+	•	approve
+	•	reject
+	•	defer
+
+Input
+
+Approval request JSON.
+
+Output
+
+Approval decision.
+
+⸻
+
+push
+
+Purpose
+
+Result delivery.
+
+Goal
+
+Send results to external systems.
+
+Targets
+	•	GitHub PR comments
+	•	Slack
+	•	email
+	•	stdout
+
+Input
+
+Result JSON.
+
+Output
+
+Delivery confirmation.
+
+⸻
+
+lease
+
+Purpose
+
+Resource governor.
+
+Goal
+
+Prevent runaway compute or cost.
+
+Controls
+	•	job concurrency
+	•	token budgets
+	•	time limits
+	•	quiet hours
+
+Input
+
+Policy JSON.
+
+Output
+
+Permit or denial.
+
+⸻
+
+mode
+
+Purpose
+
+Autonomy mode controller.
+
+Goal
+
+Define the level of autonomy allowed.
+
+Modes
+
+read
+suggest
+pr
+auto
+
+Behavior
+
+Mode	Capabilities
+read	analysis only
+suggest	propose changes
+pr	open PRs
+auto	direct fixes
+
+Input
+
+{
+  "mode": "pr"
+}
+
+Output
+
+Active policy.
+
+⸻
+
+Autonomous Workflow
+
+Clock V2 operates as an event-driven system.
+
+⸻
+
+1. System start
+
+clock start
+
+Internally:
+
+dock
+ ├── watch
+ ├── tick
+ ├── workers
+ └── queue
+
+
+⸻
+
+2. Event detection
+
+Watchers produce events.
+
+Example:
+
+git push
+CI failure
+issue opened
+
+Output:
+
+watch → event JSON
+
+
+⸻
+
+3. Job creation
+
+Events are processed by job.
+
+event → job rule → job spec
+
+Job spec includes:
+	•	goal
+	•	repo
+	•	scope
+	•	verification plan
+
+The job is enqueued:
+
+job → q put
+
+
+⸻
+
+4. Worker execution
+
+Workers fetch tasks:
+
+q take → work
+
+Worker process:
+
+rfrsh
+scope
+srch
+slce
+pack
+llm
+act
+guard
+aply
+vrfy
+
+If verification fails:
+
+undo
+retry
+
+
+⸻
+
+5. Safety enforcement
+
+Before dangerous actions:
+
+risk → eval → aprv
+
+Only if approved:
+
+aply
+
+
+⸻
+
+6. Result delivery
+
+Results are sent through push.
+
+Examples:
+	•	PR comment
+	•	summary report
+	•	Slack alert
+
+⸻
+
+7. Knowledge retention
+
+Outcomes are stored:
+
+mem store
+trce append
+
+This allows future jobs to run with:
+	•	better context
+	•	fewer LLM calls
+	•	more reliable decisions
+
+⸻
+
+V2 System Architecture
+
+             dock
+              │
+      ┌───────┴────────┐
+      │                │
+    watch             tick
+      │                │
+      └───── events ───┘
+             │
+             job
+             │
+             q
+             │
+          workers
+             │
+   retrieval → llm → patch → verify
+             │
+           eval
+             │
+           aprv
+             │
+           push
+             │
+           mem
+             │
+           trce
+
+
+⸻
+
+Key V2 Safety Guarantees
+
+Clock autonomy always obeys:
+	1.	All writes are diffs
+	2.	Every diff is validated
+	3.	Every change is verified
+	4.	Rollback always available
+	5.	All actions traced
+	6.	High-risk actions require approval
+
+⸻
+
+Result
+
+Clock V2 becomes a continuous software agent capable of:
+	•	maintaining repositories
+	•	fixing CI failures
+	•	reviewing code
+	•	automating maintenance
+	•	managing issues
+	•	performing scheduled improvements
+
+while remaining:
+	•	transparent
+	•	hackable
+	•	Unix-native
+	•	safe
+
+⸻
+
+To go from V1 (interactive CLI assistant) to V2 (OpenClaw-style 24/7 autonomous agent) while keeping the same Unix philosophy, you don’t “make the agent bigger.” You add a few new Unix-y primitives and a thin daemon/orchestrator that composes them.
+
+The jump to V2 is basically adding: scheduling + event triggers + durable state + task queue + workers + safety governance + observability.
+
+What V2 adds (conceptually)
+
+V1 is: single session, user-driven loop.
+
+V2 is: multi-task, event-driven, long-lived loop:
+	•	watches things (repos, inboxes, RSS, issues, logs)
+	•	creates tasks
+	•	executes tasks through the same tool protocol
+	•	reports results
+	•	keeps running forever
+
+You keep your microtools. You add a daemon and “ops tools”.
+
+⸻
+
+New V2 tools (Unix-style primitives)
+
+1) dock — the daemon (the only “always on” thing)
+
+Goal: run 24/7, coordinate everything, no “agent logic” inside beyond orchestration.
+Does:
+	•	loads config + policies
+	•	starts watchers
+	•	runs the scheduler
+	•	dispatches jobs to workers
+	•	enforces concurrency + budgets
+	•	writes events to trace
+
+Unix principle: it’s just a supervisor. Everything else is still tiny tools.
+
+⸻
+
+2) tick — scheduler / cron bridge
+
+Goal: time-based automation.
+Does:
+	•	run tasks on schedules (cron-like)
+	•	“every 15 min re-index”, “nightly refactor sweep”, etc.
+
+Inputs: task specs (JSON)
+Outputs: job enqueues (JSONL)
+
+(You can also just use real cron/systemd timers, but tick gives portable scheduling + stateful retries.)
+
+⸻
+
+3) watch — event triggers
+
+Goal: react to events without polling everything by hand.
+Events to support early:
+	•	filesystem changes (git diff, new commits)
+	•	GitHub issues/PRs (poll or webhook)
+	•	CI failures
+	•	new log lines
+	•	inbound “commands” (local file drop, webhook, email later)
+
+Output: normalized event JSONL:
+	•	{ "type":"git.push", "repo":"...", "ref":"...", "meta":... }
+
+⸻
+
+4) q — durable queue (spool)
+
+Goal: reliable job storage between crashes.
+Does:
+	•	put enqueue jobs
+	•	take lease jobs to workers
+	•	ack / fail with backoff
+	•	dead-letter queue
+
+Implementation: keep it Unix-friendly:
+	•	simplest: sqlite file in .clock/ (rock solid)
+	•	or file-spool directories with atomic renames (very Unix)
+	•	keep the interface identical either way
+
+⸻
+
+5) job — task compiler (event → plan)
+
+Goal: turn events into actionable tasks.
+Does:
+	•	match rules: “on PR open → run review,” “on CI fail → propose fix”
+	•	compute scope/workset
+	•	attach policy and budgets
+
+Output: job JSON with:
+	•	goal, repo, scope, verify plan, limits, priority
+
+⸻
+
+6) work — worker runner
+
+Goal: execute jobs using the same V1 toolbox.
+Does:
+	•	fetch job from q
+	•	run the V1 loop: pack → llm → act → guard → aply → vrfy…
+	•	checkpoint, rollback, commit (if allowed)
+	•	produce a result artifact
+
+Key: V2 doesn’t need new “agent intelligence.” It needs reliable workers.
+
+⸻
+
+7) mem — durable memory (not “chat memory”)
+
+Goal: long-lived, queryable state.
+What it stores:
+	•	dossier versions
+	•	repo fingerprints
+	•	past fixes + outcomes
+	•	known commands & policies per repo
+	•	“playbooks” (known procedures)
+	•	embeddings optionally later
+
+Unix approach: sqlite + append-only trace. Keep it inspectable.
+
+⸻
+
+8) eval — automatic quality gates
+
+Goal: stop the agent from doing dumb or risky things at 3am.
+Does:
+	•	static checks on proposed plan before edits
+	•	score risk, require approvals for “high risk”
+	•	enforce invariants: “don’t touch migrations,” “no dependency changes”
+	•	run lightweight “lint of the plan” (not code)
+
+This is the autonomy safety layer.
+
+⸻
+
+9) aprv — human approval interface
+
+Goal: controlled autonomy.
+Modes:
+	•	auto (low risk jobs)
+	•	ask (needs approval)
+	•	deny (blocked classes)
+
+Unix interface: approvals as files or CLI prompts:
+	•	.clock/approvals/inbox/*.json
+	•	approving is clock ok <id> or dropping a signed file
+
+This gives you “human-in-the-loop” without breaking Unix purity.
+
+⸻
+
+10) push — reporters / notifiers
+
+Goal: deliver outputs somewhere.
+Targets:
+	•	stdout (local)
+	•	GitHub PR comment
+	•	Slack/Discord webhook
+	•	email later
+	•	local notifications
+
+Output is always a structured “result object” plus a human report (rpt).
+
+⸻
+
+11) lease — resource governor
+
+Goal: avoid runaway costs and CPU.
+Does:
+	•	global concurrency limits
+	•	per-repo rate limits
+	•	token budget limits
+	•	time budgets per job
+	•	“quiet hours”
+
+This is what makes 24/7 sustainable.
+
+⸻
+
+What capabilities this unlocks (OpenClaw-class)
+
+With the above, you can do:
+	•	Continuous “maintainer mode” (watch repo, fix CI breaks, open PRs)
+	•	Daily housekeeping (deps audit, formatting, dead code scans)
+	•	Continuous code review assistant (summaries, risk flags, suggested diffs)
+	•	Incident response (tail logs → open tasks → propose remediation)
+	•	Backlog automation (issues → tasks → PR drafts)
+
+All while using the same atomic patch + verify + rollback core.
+
+⸻
+
+V2 workflow (how it all flows)
+
+1) Events in
+	•	watch emits events (git push, CI fail, issue opened)
+
+2) Task creation
+	•	job converts event → job spec
+	•	q put stores it durably
+
+3) Execution
+	•	work pulls job (q take)
+	•	ensures macro-context is ready (rfrsh, doss)
+	•	runs the agent loop:
+	•	retrieve → decide → patch → verify → rollback/retry
+
+4) Governance
+	•	eval gates risky actions
+	•	aprv requests approval if needed
+
+5) Delivery
+	•	push publishes results (PR, comment, report)
+	•	q ack completes job (or fail with backoff)
+
+6) Memory & learning
+	•	mem stores outcomes
+	•	future jobs use stored repo fingerprints + known commands to reduce cost/latency
+
+⸻
+
+The “Unix principles” translation for autonomy
+
+Keep it inspectable
+
+Everything is:
+	•	JSON/JSONL files
+	•	sqlite db you can query
+	•	append-only traces
+
+No magic hidden state.
+
+Make failure safe
+
+Autonomy requires:
+	•	checkpoints always
+	•	rollback always
+	•	retries with backoff
+	•	dead-letter queue
+	•	strict policies
+
+Make decisions replayable
+	•	every LLM input and output gets hashed + logged in trce
+	•	every tool call is an event
+	•	you can replay a job deterministically
+
+This is how you debug autonomy.
+
+⸻
+
+What you should build first for V2 (highest leverage order)
+	1.	q (durable queue)
+	2.	work (worker runner using V1 loop)
+	3.	watch (one event source: git + CI)
+	4.	dock (daemon supervisor)
+	5.	eval + aprv (governance)
+	6.	push (GitHub PR/issue comment integration)
+	7.	mem (durable memory)
+	8.	lease (budgets/rate limits)
+	9.	tick (scheduler)
+
+That gets you to “OpenClaw-ish” quickly without overbuilding.
+
+⸻
+
+The single most important change from V1 → V2
+
+In V1, the user is the safety layer.
+
+In V2, policy becomes the safety layer.
+
+So you need:
+	•	risk scoring (risk + eval)
+	•	approvals (aprv)
+	•	budgets (lease)
+	•	durable queue (q)
+	•	traceability (trce everywhere)
+
+Everything else is just orchestration.

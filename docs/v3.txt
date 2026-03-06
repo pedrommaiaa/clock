@@ -1,0 +1,615 @@
+Below is a V3 Markdown spec that pushes Clock beyond OpenClaw while staying faithful to the same Unix principles: tiny tools, explicit I/O, composable pipelines, inspectable state.
+
+This V3 focuses on: multi-agent swarms, long-term memory/knowledge graphs, self-improving playbooks, continuous evaluation, distributed execution, and autonomous research loops—all without turning Clock into a monolith.
+
+⸻
+
+Clock V3 — Beyond OpenClaw
+
+Clock V3 extends V2 into a distributed, multi-agent, self-improving system that can:
+	•	run continuously across multiple repos and tasks
+	•	coordinate multiple specialized agents (“swarm”)
+	•	maintain long-term structured knowledge (graph + memory)
+	•	learn playbooks from successful runs
+	•	evaluate and improve itself over time
+	•	operate safely with governance and auditability
+
+Unix principle remains: the “system” is a set of small programs that pass structured data.
+
+⸻
+
+Tool Index
+
+V1 Core Toolbox
+
+scan scope srch slce pack map ctrt flow doss rfrsh llm act guard aply vrfy undo rpt
+
+V1 Go Microtools
+
+jolt budg anch risk exec dect graf trce mcp
+
+V2 Autonomous Tools
+
+dock tick watch q job work mem eval aprv push lease mode
+
+V3 Tools (New)
+
+swrm
+role
+hub
+shrd
+knox
+link
+note
+pbk
+rank
+judge
+ablt
+repl
+farm
+sync
+orch
+
+
+⸻
+
+V3 Concepts (What changes)
+
+V2 makes Clock autonomous.
+
+V3 makes Clock:
+	1.	multi-agent (specialists working together)
+	2.	distributed (multiple workers across machines)
+	3.	self-improving (playbooks + evaluation)
+	4.	knowledge-grounded (graph memory + citations)
+	5.	governed (safer autonomy at scale)
+
+You still keep:
+	•	patch-only writes
+	•	verification loops
+	•	traces
+	•	approvals for high risk
+
+⸻
+
+V3 Tools
+
+swrm
+
+Purpose
+
+Swarm coordinator.
+
+Goal
+
+Split a job into subjobs and coordinate specialized agents.
+
+How it works
+	•	takes a job goal and decomposes into tasks
+	•	assigns tasks to roles (planner/reviewer/tester/etc.)
+	•	merges results into a single proposed outcome
+
+Input (JSON)
+
+{
+  "goal": "reduce build time",
+  "repo": ".",
+  "mode": "pr"
+}
+
+Output (JSON)
+
+{
+  "tasks": [
+    { "id": "t1", "role": "plan", "goal": "identify bottlenecks" },
+    { "id": "t2", "role": "perf", "goal": "measure slow steps" },
+    { "id": "t3", "role": "safe", "goal": "suggest minimal changes" }
+  ]
+}
+
+
+⸻
+
+role
+
+Purpose
+
+Role prompt + policy loader.
+
+Goal
+
+Make “agents” consistent, specialized, and safe.
+
+How it works
+	•	outputs role templates: system prompt + allowed tools + constraints
+	•	examples:
+	•	plan: decomposes, chooses strategy
+	•	edit: proposes patches
+	•	revw: critic/reviewer
+	•	test: focuses on verification
+	•	sec: security constraints
+	•	perf: performance profiling strategies
+
+Input (JSON)
+
+{ "role": "revw" }
+
+Output (JSON)
+
+{ "system": "...", "policy": {...}, "rubric": {...} }
+
+
+⸻
+
+hub
+
+Purpose
+
+Message bus for agents.
+
+Goal
+
+Coordinate multiple workers locally or distributed.
+
+How it works
+	•	publish/subscribe channels
+	•	job/task status updates
+	•	shared context artifacts references
+	•	no direct agent logic
+
+Input
+
+JSONL messages.
+
+Output
+
+JSONL messages.
+
+⸻
+
+shrd
+
+Purpose
+
+Shared artifact store.
+
+Goal
+
+Store and retrieve artifacts by content hash.
+
+How it works
+	•	stores prompt bundles, slices, diffs, verify logs, dossiers
+	•	returns a stable reference like sha256:...
+
+Input (JSON)
+
+{ "put": { "type": "bundle", "data": {...} } }
+
+Output (JSON)
+
+{ "ref": "sha256:abc123..." }
+
+
+⸻
+
+knox
+
+Purpose
+
+Knowledge graph store.
+
+Goal
+
+Maintain a structured long-term map of facts and relationships.
+
+What it stores
+	•	modules → responsibilities
+	•	APIs → invariants
+	•	failures → fixes → outcomes
+	•	“what broke last time”
+	•	known risky zones
+	•	dependency relationships
+	•	code ownership hints (optional)
+
+Input (JSON)
+
+Graph operations:
+	•	add node/edge
+	•	query
+	•	attach evidence (citations)
+
+Output (JSON)
+
+Query results.
+
+⸻
+
+link
+
+Purpose
+
+Evidence linker.
+
+Goal
+
+Turn raw observations into graph links with citations.
+
+How it works
+	•	takes slices / diffs / logs
+	•	extracts candidate facts
+	•	attaches citations by file/line and trace IDs
+	•	writes updates to knox
+
+Input
+
+JSON artifacts + citations.
+
+Output
+
+Graph update operations.
+
+⸻
+
+note
+
+Purpose
+
+Long-term notes (human-readable memory).
+
+Goal
+
+Maintain a compact “living dossier” across runs.
+
+How it works
+	•	distills trace logs into short notes
+	•	stores “what we learned”
+	•	rollups by repo/component
+
+Input
+
+Trace refs + job outcomes.
+
+Output
+
+Markdown notes + metadata.
+
+⸻
+
+pbk
+
+Purpose
+
+Playbook generator.
+
+Goal
+
+Learn reusable procedures from successful jobs.
+
+How it works
+	•	detects repeated patterns:
+	•	“CI fail in Jest → steps A/B/C”
+	•	“Type error in TS → steps D/E”
+	•	outputs playbooks that can be invoked later
+
+Input
+
+Job outcomes + traces.
+
+Output
+
+Playbook definition (JSON + Markdown) with:
+	•	trigger conditions
+	•	steps (tool chain)
+	•	verification requirements
+	•	risk class
+
+⸻
+
+rank
+
+Purpose
+
+Retrieval ranking improvement layer.
+
+Goal
+
+Make context selection smarter over time.
+
+How it works
+	•	learns which slices helped
+	•	boosts files/modules that frequently matter
+	•	uses historical success as a signal
+	•	can feed budg and pack
+
+Input
+
+Candidates + historical signals.
+
+Output
+
+Re-ranked candidates.
+
+⸻
+
+judge
+
+Purpose
+
+Automated evaluation harness.
+
+Goal
+
+Continuously measure agent quality and regressions.
+
+How it works
+	•	replays a corpus of tasks (“bench suite”)
+	•	scores outputs:
+	•	correctness (tests pass)
+	•	minimal diffs
+	•	adherence to policy
+	•	latency/cost
+	•	compares versions of prompts/tools
+
+Input
+
+Bench definitions + references to repos/tasks.
+
+Output
+
+Score reports (JSON + Markdown).
+
+⸻
+
+ablt
+
+Purpose
+
+A/B and ablation runner.
+
+Goal
+
+Test tool/prompt variations safely.
+
+How it works
+	•	runs same job multiple ways:
+	•	different prompt templates
+	•	different models
+	•	different retrieval policies
+	•	selects best outcome per rubric
+
+Input
+
+Experiment spec.
+
+Output
+
+Comparison report + winner decision.
+
+⸻
+
+repl
+
+Purpose
+
+Replay engine.
+
+Goal
+
+Deterministic re-execution of previous runs.
+
+How it works
+	•	uses trce + shrd artifacts
+	•	replays tool calls
+	•	optionally replays LLM calls (or substitutes stored responses)
+
+Input
+
+Trace ID.
+
+Output
+
+Replay report.
+
+⸻
+
+farm
+
+Purpose
+
+Distributed worker pool manager.
+
+Goal
+
+Scale execution across machines.
+
+How it works
+	•	registers worker nodes
+	•	leases jobs to nodes
+	•	ensures consistent tool versions
+	•	routes artifacts via shrd
+
+Input
+
+Worker registration + queue refs.
+
+Output
+
+Worker lease decisions.
+
+⸻
+
+sync
+
+Purpose
+
+State synchronizer.
+
+Goal
+
+Keep mem, knox, and artifacts consistent across nodes.
+
+How it works
+	•	syncs:
+	•	queue states
+	•	artifact refs
+	•	graph updates
+	•	playbooks
+	•	conflict resolution via timestamps + content hashing
+
+Input/Output
+
+Sync events.
+
+⸻
+
+orch
+
+Purpose
+
+Global orchestrator (multi-repo, multi-goal).
+
+Goal
+
+Operate like a 24/7 “engineering ops AI” across many projects.
+
+How it works
+	•	takes higher-level objectives:
+	•	“keep all repos green”
+	•	“reduce build times”
+	•	“tighten security”
+	•	creates campaigns:
+	•	scan all repos
+	•	generate tasks
+	•	dispatch swarm
+	•	open PRs
+	•	track results over time
+
+Input
+
+Campaign spec.
+
+Output
+
+Campaign status + task stream.
+
+⸻
+
+V3 Workflow (End-to-end)
+
+V3 is a superset of V2. A typical run looks like this:
+
+1) Ingest events
+	•	watch produces events (git push, CI fail, issue)
+	•	tick produces scheduled triggers
+	•	orch can generate campaign events (“audit all repos weekly”)
+
+Events → job → q put
+
+2) Swarm decomposition
+
+Worker takes a job:
+	•	swrm decomposes into sub-tasks
+	•	role loads role policies/prompts for each sub-task
+	•	tasks published to hub
+
+3) Distributed execution
+	•	farm leases tasks to workers (local or remote)
+	•	each worker uses the same V1 loop tools:
+	•	scope/srch/slce/pack/llm/act/guard/aply/vrfy/undo
+
+Artifacts are stored in shrd (content-addressed).
+
+4) Merge and critique
+	•	a reviewer role (role=revw) evaluates candidate patches/plans
+	•	eval applies governance gates
+	•	aprv invoked for high-risk changes
+
+5) Delivery
+	•	push opens PRs / posts summaries / alerts
+	•	note writes a short memory update
+	•	link updates the knowledge graph (knox)
+
+6) Learning
+	•	pbk extracts playbooks from successful runs
+	•	rank updates retrieval heuristics
+	•	judge scores outcomes on benchmark suites
+	•	ablt tests alternative policies/prompts if performance regresses
+	•	repl enables replayable debugging
+
+⸻
+
+V3 Architecture Diagram (Text)
+
+                 orch (campaigns)
+                      │
+watch/tick → job →  q  │
+                │      │
+                └→ work (job runner)
+                      │
+                    swrm ──→ hub ──→ farm ──→ distributed workers
+                      │                 │
+                    role               V1 loop tools
+                      │                 │
+                    shrd (artifacts)   trce (logs)
+                      │                 │
+                  knox/link/note/pbk/rank (learning + memory)
+                      │
+                  judge/ablt/repl (evaluation + improvement)
+                      │
+                    push (delivery)
+
+
+⸻
+
+V3 Autonomy Modes (Safer at scale)
+
+V3 introduces not just “mode”, but policy tiers:
+	•	read → analyze only
+	•	suggest → proposes diffs but does not apply
+	•	pr → opens PRs; no direct main-branch edits
+	•	auto → applies low-risk fixes directly, PR for medium/high
+	•	ops → multi-repo campaigns, requires strict governance + audit
+
+Enforcement remains:
+	•	guard + risk + eval + aprv
+
+⸻
+
+What makes V3 “beyond OpenClaw”
+
+1) Swarm specialization
+
+Multiple roles collaborate:
+	•	planner, editor, reviewer, tester, security/perf
+
+2) Knowledge graph grounding
+
+The system builds durable, queryable knowledge:
+	•	relationships, invariants, “what worked last time”
+
+3) Self-improving playbooks
+
+It learns procedures from real outcomes and reuses them.
+
+4) Continuous evaluation
+
+It tests itself (judge/ablt) so it improves instead of drifting.
+
+5) Distributed scaling
+
+It can run across machines with consistent artifacts and replayability.
+
+⸻
+
+Build order (Practical V3 roadmap)
+
+If you want V3 without boiling the ocean, build in this order:
+	1.	shrd (artifact store)
+	2.	swrm + role (multi-agent specialization)
+	3.	hub (coordination bus)
+	4.	knox + link (knowledge graph)
+	5.	pbk (playbooks)
+	6.	judge + repl (evaluation + replay)
+	7.	farm + sync (distributed)
+	8.	orch (multi-repo campaigns)
+	9.	ablt + rank (systematic improvement)

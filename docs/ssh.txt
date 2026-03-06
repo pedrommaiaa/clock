@@ -1,0 +1,615 @@
+Clock Additions — Remote Shell + Universal LLM Router
+
+This document adds two tools to the Clock toolbox:
+	•	rcon — safe remote terminal access (phone → shell)
+	•	lmux — universal LLM wrapper (multiple APIs + local open-weight)
+
+Tool names follow: single word, 3–5 chars, no dashes.
+
+⸻
+
+Tool Index
+	•	rcon
+	•	lmux
+
+⸻
+
+rcon
+
+What it does
+
+Remote connection helper that gives you a safe, consistent way to jump from your phone into your dev machine’s shell and land directly in the right repo/session for Clock work.
+
+Goal
+
+Make “work on my codebase from my phone”:
+	•	secure (no public ports)
+	•	simple (one command / one tap)
+	•	reliable (persistent sessions)
+	•	policy-aligned (read-only vs read-write modes)
+
+How it accomplishes that
+
+rcon does not replace SSH. It standardizes and hardens access by:
+	•	choosing a safe transport (default: Tailscale + SSH)
+	•	enforcing repo entry (cd <repo>)
+	•	optionally attaching to a persistent session (tmux)
+	•	supporting two access modes:
+	•	ro: read-only analysis / browsing
+	•	rw: allows edits, commits, pushes (still policy-governed)
+
+rcon can either:
+	•	print the exact connection command (copy/paste-friendly), or
+	•	execute the connection itself (if run on a machine with SSH configured)
+
+Inputs (JSON)
+
+{
+  "host": "mydevbox",
+  "user": "clock",
+  "repo": "/home/clock/projects/myrepo",
+  "mode": "ro",
+  "sess": "tmux",
+  "cmd": "clock ask \"summarize this repo\"",
+  "transport": "tailscale"
+}
+
+Input notes
+	•	host may be a Tailscale hostname (recommended).
+	•	mode:
+	•	ro: read-only workflows (safe default)
+	•	rw: edit workflows (requires stricter policy + optional approvals)
+	•	sess:
+	•	tmux: attach or create a named session
+	•	none: normal login
+	•	cmd: optional command to run after connecting.
+
+Outputs
+
+Option A: command-only output (text)
+
+Prints the final connect command for the phone user to run:
+	•	SSH command with the correct host/user
+	•	repo entry + tmux attach
+	•	optional immediate Clock command
+
+Option B: structured output (JSON)
+
+{
+  "ok": true,
+  "transport": "tailscale",
+  "host": "mydevbox",
+  "user": "clock",
+  "repo": "/home/clock/projects/myrepo",
+  "mode": "ro",
+  "sess": "tmux",
+  "connect": "ssh ...",
+  "notes": ["tmux session: clock-main"]
+}
+
+
+⸻
+
+Recommended rcon security posture (default)
+
+Default transport: Tailscale + SSH
+Default session: tmux
+Default mode: ro
+
+Why this is the best deal
+	•	no port forwarding
+	•	end-to-end encrypted mesh
+	•	device-level access controls
+	•	works well on iPhone with any SSH client
+
+Hardening options (still Unix-y)
+	•	dedicated user: clock
+	•	SSH keys only (no passwords)
+	•	optional restricted entry command:
+	•	always cd to repo
+	•	optionally force tmux
+	•	environment scrub for secrets (especially if you run agents remotely)
+
+⸻
+
+lmux
+
+What it does
+
+Universal LLM router (a “mux”) that lets Clock use one standard request/response format while supporting:
+	•	multiple hosted APIs (Anthropic / OpenAI / others)
+	•	local open-weight model servers (Ollama / vLLM / llama.cpp)
+
+Goal
+
+Make the rest of Clock provider-agnostic.
+
+Clock should be able to say:
+	•	“use this model for planning”
+	•	“use that model for patch generation”
+	•	“fallback to local model if cloud fails”
+
+without changing any other tools.
+
+How it accomplishes that
+
+lmux is a pure I/O adapter:
+	•	input: one canonical JSON request
+	•	internal: normalize to provider-specific request
+	•	output: one canonical JSON response
+
+It does not contain agent logic. It only:
+	•	routes
+	•	adapts
+	•	returns usage metadata consistently
+
+Inputs (JSON)
+
+{
+  "model": "anth:sonnet",
+  "messages": [
+    {"role":"system","content":"You must output strict JSON."},
+    {"role":"user","content":"Return a tool action envelope for next step."}
+  ],
+  "opts": {
+    "temp": 0.2,
+    "top_p": 0.9,
+    "max_out": 1200,
+    "json": true
+  },
+  "tools": [
+    {"name":"srch","schema":{...}},
+    {"name":"slce","schema":{...}}
+  ],
+  "timeout": 45
+}
+
+Model naming convention (recommended)
+
+Use short provider prefixes:
+	•	anth:* for Anthropic
+	•	oai:* for OpenAI
+	•	oll:* for Ollama local
+	•	vllm:* for vLLM server
+	•	lcpp:* for llama.cpp server
+
+Examples:
+	•	anth:sonnet
+	•	oai:gpt4o
+	•	oll:llama3
+	•	vllm:qwen2.5-coder
+
+Outputs (JSON)
+
+{
+  "ok": true,
+  "model": "anth:sonnet",
+  "text": "",
+  "json": { "kind": "tool", "name": "srch", "args": { "q": "..." }, "why": "..." },
+  "usage": { "in": 1234, "out": 456, "cost": 0.12 },
+  "meta": { "ms": 1830, "req_id": "..." }
+}
+
+Output notes
+	•	If strict JSON is required, json must be present.
+	•	usage.cost may be absent for local models.
+	•	meta records latency and provider IDs when available.
+
+⸻
+
+How lmux fits with llm
+
+In Clock:
+	•	lmux handles routing + provider adaptation.
+	•	llm remains the contract enforcer for agent output:
+	•	retries if invalid JSON
+	•	ensures action envelope schema
+	•	keeps the “tool protocol” strict
+
+So the chain becomes:
+	•	pack → llm → (llm calls lmux) → act
+
+Or if you prefer all pipes:
+	•	pack | lmux | act (with an additional strictness step if needed)
+
+⸻
+
+Workflow — Remote phone → terminal → Clock → git
+
+One-time setup (recommended)
+	1.	Install and login to Tailscale on:
+	•	your dev machine
+	•	your iPhone
+	2.	Enable SSH over Tailscale:
+	•	either Tailscale SSH
+	•	or normal SSH reachable only on the Tailnet
+	3.	Install tmux on the dev machine.
+	4.	Create a dedicated user:
+	•	clock (optional but recommended)
+	•	SSH keys only
+	5.	Ensure repos are in predictable paths:
+	•	/home/clock/projects/<repo>
+
+Daily use flow (from phone)
+	1.	Open SSH client on phone (while on Tailscale).
+	2.	Use rcon output (or run the printed SSH command):
+	•	attaches to tmux session
+	•	lands in repo root
+	3.	Run Clock:
+	•	clock ask "..."
+	•	clock plan "..."
+	•	clock fix "..."
+	4.	Review:
+	•	git diff
+	•	clock review (if you have it)
+	5.	Commit/push (only in rw mode):
+	•	git status
+	•	git commit -m "..."
+	•	git push
+
+Safety defaults
+	•	Use mode=ro for exploration and analysis
+	•	Switch to mode=rw only when you intend to edit/commit
+	•	Keep vrfy mandatory after aply
+	•	For high-risk diffs, require aprv
+
+⸻
+
+Workflow — Universal model selection with lmux
+
+Default role-to-model mapping (example)
+	•	Planner: cheaper, fast, strict JSON capable
+	•	Editor: best “diff discipline” model
+	•	Reviewer: stronger reasoning model
+	•	Summarizer: cheap model
+
+Clock keeps these mappings in .clock/config.json and passes them to lmux.
+
+Failover policy (example)
+
+If anth:* fails:
+	•	fallback to oai:*
+If cloud is unavailable:
+	•	fallback to oll:* local model for “read-only” tasks
+
+All of that is implemented at the lmux layer, not in every tool.
+
+⸻
+
+Clock Additions — Remote Access + LLM Routing Utilities
+
+This document adds two companion tools to support the previously defined tools:
+	•	keys — manage SSH keys and device allowlists for secure remote access
+	•	mset — manage model presets and role mappings for lmux
+
+These tools follow the Clock toolbox conventions:
+	•	single-word names
+	•	3–5 characters
+	•	stdin → stdout
+	•	JSON / JSONL I/O
+	•	single responsibility
+
+⸻
+
+Tool Index
+
+keys
+mset
+
+
+⸻
+
+keys
+
+Purpose
+
+SSH key and device access manager.
+
+Goal
+
+Provide a simple, secure way to manage which devices and keys are allowed to connect to your development machine using rcon.
+
+This ensures remote access is limited to trusted devices such as your phone or laptop.
+
+⸻
+
+How it works
+
+keys manages a structured allowlist of SSH public keys and device metadata.
+
+It performs tasks such as:
+	•	adding new SSH keys
+	•	removing revoked keys
+	•	listing authorized devices
+	•	verifying that a device key is permitted
+	•	generating restricted SSH configurations
+
+The allowlist is stored in a JSON file within:
+
+.clock/keys.json
+
+The tool can also update:
+
+~/.ssh/authorized_keys
+
+with optional command restrictions.
+
+⸻
+
+Inputs (JSON)
+
+Add a key
+
+{
+  "action": "add",
+  "name": "iphone",
+  "pubkey": "ssh-ed25519 AAAAC3...",
+  "mode": "ro"
+}
+
+Remove a key
+
+{
+  "action": "remove",
+  "name": "old-laptop"
+}
+
+List keys
+
+{
+  "action": "list"
+}
+
+
+⸻
+
+Outputs (JSON)
+
+Example response:
+
+{
+  "ok": true,
+  "devices": [
+    {"name": "iphone", "mode": "ro"},
+    {"name": "macbook", "mode": "rw"}
+  ]
+}
+
+
+⸻
+
+Security model
+
+Each key entry includes:
+	•	device name
+	•	SSH public key
+	•	access mode (ro or rw)
+	•	optional restrictions
+
+Example stored record:
+
+{
+  "name": "iphone",
+  "mode": "ro",
+  "pubkey": "ssh-ed25519 AAAA...",
+  "created": "2026-03-05T12:00:00Z"
+}
+
+Access modes
+
+ro (read-only)
+
+Allowed actions:
+	•	browse repo
+	•	run Clock analysis
+	•	run search and inspection tools
+
+Forbidden actions:
+	•	editing files
+	•	committing changes
+	•	pushing to remote repos
+
+⸻
+
+rw (read-write)
+
+Allowed actions:
+	•	editing files
+	•	committing changes
+	•	pushing updates
+	•	running Clock fix operations
+
+High-risk actions may still require aprv.
+
+⸻
+
+Optional restrictions
+
+keys can configure SSH restrictions such as:
+	•	forced command entry
+	•	restricted working directory
+	•	environment cleanup
+	•	disabling port forwarding
+
+Example SSH rule generated:
+
+command="/usr/local/bin/clock-shell --mode ro",no-port-forwarding,no-agent-forwarding
+
+
+⸻
+
+mset
+
+Purpose
+
+Model preset manager for lmux.
+
+Goal
+
+Define which LLM models should be used for different Clock roles.
+
+This allows the system to:
+	•	switch providers easily
+	•	assign specialized models per task
+	•	enable fallback strategies
+	•	support both cloud and local models
+
+⸻
+
+How it works
+
+mset manages model presets stored in:
+
+.clock/models.json
+
+Each preset defines the model used for a specific role such as:
+	•	planner
+	•	editor
+	•	reviewer
+	•	summarizer
+
+Clock tools query mset to determine which model to use before calling lmux.
+
+⸻
+
+Inputs (JSON)
+
+Set role model
+
+{
+  "action": "set",
+  "role": "planner",
+  "model": "anth:sonnet"
+}
+
+Remove role mapping
+
+{
+  "action": "remove",
+  "role": "planner"
+}
+
+List model mappings
+
+{
+  "action": "list"
+}
+
+
+⸻
+
+Outputs (JSON)
+
+Example response:
+
+{
+  "ok": true,
+  "roles": {
+    "planner": "anth:sonnet",
+    "editor": "oai:gpt4o",
+    "reviewer": "anth:opus",
+    "summarizer": "oll:llama3"
+  }
+}
+
+
+⸻
+
+Model naming convention
+
+Models are referenced using provider prefixes.
+
+Cloud providers
+
+anth:*   → Anthropic models
+oai:*    → OpenAI models
+
+Local providers
+
+oll:*    → Ollama models
+vllm:*   → vLLM server models
+lcpp:*   → llama.cpp server
+
+
+⸻
+
+Example configuration
+
+Stored file:
+
+.clock/models.json
+
+Example content:
+
+{
+  "planner": "anth:sonnet",
+  "editor": "oai:gpt4o",
+  "reviewer": "anth:opus",
+  "summarizer": "oll:llama3"
+}
+
+
+⸻
+
+Fallback support
+
+mset can optionally define fallback models.
+
+Example:
+
+{
+  "planner": ["anth:sonnet", "oai:gpt4o"],
+  "editor": ["oai:gpt4o", "oll:llama3"]
+}
+
+lmux attempts models in order until one succeeds.
+
+⸻
+
+Workflow — Remote development using rcon + keys
+
+Device authorization
+	1.	Generate SSH key on phone.
+	2.	Add the key:
+
+keys add
+
+	3.	Key is stored in .clock/keys.json.
+
+⸻
+
+Remote access flow
+	1.	Phone connects via Tailscale.
+	2.	SSH client uses stored key.
+	3.	rcon connects and attaches to tmux session.
+	4.	User lands in repo root.
+	5.	Clock commands can be executed safely.
+
+⸻
+
+Workflow — Model routing using mset + lmux
+	1.	Clock tool needs a model for a task.
+	2.	It queries mset.
+	3.	mset returns model identifier.
+	4.	lmux routes the request to the provider.
+	5.	Provider response is normalized and returned.
+
+⸻
+
+Result
+
+With keys and mset, Clock gains:
+	•	secure device-level remote access control
+	•	flexible model configuration
+	•	provider independence
+	•	clean Unix-style tool composition
+
+These tools complement:
+	•	rcon (remote shell access)
+	•	lmux (universal LLM router)
+
+while preserving Clock’s design philosophy:
+	•	small tools
+	•	composable pipelines
+	•	explicit inputs and outputs
+	•	secure defaults.

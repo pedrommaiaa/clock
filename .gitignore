@@ -1,0 +1,28 @@
+# Build output
+bin/
+
+# Runtime state (per-project)
+.clock/
+
+# CCCM local state
+.cccm/
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

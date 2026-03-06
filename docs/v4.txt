@@ -1,0 +1,952 @@
+Here’s what V4 looks like if you want self-improvement + tool creation, while keeping the Unix philosophy and—critically—keeping a small immutable core that prevents the system from “rewriting itself into the void.”
+
+The trick is to separate the system into:
+	1.	Immutable Kernel (small, trusted)
+	2.	Mutable Toolspace (everything else)
+	3.	Governed Self-Modification Pipeline (how new tools are proposed, tested, accepted)
+
+If you do that, V4 becomes realistic and safe.
+
+⸻
+
+Clock V4 — Self-Improving, Tool-Creating System
+
+The big idea
+
+Clock can analyze itself, propose improvements, and even create new microtools, but it can’t just write arbitrary code directly into the core.
+
+Instead, it operates like a package manager / build system:
+	•	propose changes as artifacts
+	•	test them in isolation
+	•	benchmark them
+	•	require signatures/approvals for promotion
+	•	roll forward / roll back cleanly
+
+Unix analogy: the kernel is sh, everything else is a userland program. Userland can evolve; the kernel stays tiny and trusted.
+
+⸻
+
+1) Immutable Core (Kernel)
+
+This is the only part you treat as “trusted computing base.” It must stay small enough that you can audit it.
+
+Kernel responsibilities:
+	•	tool protocol enforcement (act)
+	•	policy gates (eval, aprv)
+	•	sandbox execution (exec)
+	•	artifact hashing + store (shrd)
+	•	trace logging (trce)
+	•	queue leasing (q)
+	•	version pinning + tool registry validation
+	•	rollback primitives
+
+What kernel must NOT contain:
+	•	big heuristics
+	•	language-specific intelligence
+	•	repo-specific logic
+	•	fancy planning strategies
+
+Keep it boring.
+
+Kernel invariant
+
+The kernel never “edits itself.” It can only:
+	•	propose changes to itself
+	•	route them through a strict acceptance pipeline
+
+⸻
+
+2) Mutable Toolspace (Userland)
+
+Everything else is plugins/microtools:
+	•	retrieval tools (srch, graf)
+	•	bundling (budg, pack)
+	•	patching (anch)
+	•	playbooks (pbk)
+	•	orchestration roles (role)
+	•	swarm logic (swrm)
+	•	even “new tools” it invents
+
+All of this lives in a versioned directory like:
+	•	.clock/tools/<toolname>/<version>/...
+
+or installed globally but pinned by manifest.
+
+⸻
+
+3) Tool Registry + Manifest (the “constitution”)
+
+You need a single source of truth that defines:
+	•	what tools exist
+	•	how they are called
+	•	their input/output schemas
+	•	their permissions
+	•	their version constraints
+	•	whether they’re “trusted” or “untrusted”
+
+Call it: the registry.
+
+Example registry fields (conceptual):
+	•	name
+	•	version
+	•	sha256
+	•	entrypoint
+	•	schema_in, schema_out
+	•	capabilities (read/write/run/net)
+	•	risk_class
+	•	tests_required
+	•	owner (core vs userland)
+	•	signatures (who approved)
+
+This is how you prevent the system from silently swapping a tool with a malicious one.
+
+⸻
+
+4) V4 New Tools (Unix-style)
+
+To enable self-improvement safely, you add a few new primitives.
+
+self
+
+Goal: self-analysis entrypoint.
+Input: “Improve X” / “Find bottleneck” / “Add missing capability.”
+Output: a structured improvement proposal (not code changes yet).
+
+What it produces:
+	•	target area (tool or workflow)
+	•	measured symptoms (slow, brittle, costly)
+	•	hypothesis
+	•	proposed change type (new tool / modify tool / modify policy / new playbook)
+	•	acceptance criteria
+
+⸻
+
+diag
+
+Goal: instrument and profile the system itself.
+How: analyzes traces, timings, failure rates, token usage, tool error rates.
+Output: diagnostics report + ranked pain points.
+
+This is the feedback loop.
+
+⸻
+
+spec
+
+Goal: generate a tool spec (like your Markdown toolbox format, but machine-readable).
+Output: canonical tool definition:
+	•	name (3–5 letters)
+	•	goal
+	•	I/O schema
+	•	permissions
+	•	test plan
+	•	examples
+
+This prevents “random tool creation.” Tools start as specs.
+
+⸻
+
+forge
+
+Goal: generate a candidate implementation as an artifact, not installed.
+Output: a buildable “tool package” stored in shrd:
+	•	source bundle
+	•	build instructions
+	•	tests
+	•	manifest
+
+You can have multiple forges:
+	•	forgego for Go microtools
+	•	forgesh for shell tools
+But to keep names short, you can keep one forge and encode language in spec.
+
+⸻
+
+test
+
+Goal: run tool-level tests in isolation.
+Output: pass/fail + logs + coverage-ish signals.
+
+⸻
+
+bench
+
+Goal: benchmark and compare versions.
+Output: latency/cost/accuracy regression report.
+
+⸻
+
+gate
+
+Goal: promotion gatekeeper.
+How: enforces acceptance policy:
+	•	all tests pass
+	•	no policy violations
+	•	no regressions beyond thresholds
+	•	approval required for higher risk
+	•	signatures present
+
+Output: “promote yes/no + reason.”
+
+⸻
+
+prom
+
+Goal: promote a tool package into the registry.
+How: installs it into toolspace, updates registry, pins version.
+Output: updated registry entry.
+
+⸻
+
+roll
+
+Goal: rollback tool versions and registry states.
+Output: restored state + reason.
+
+⸻
+
+audit
+
+Goal: security audit on tools and changes.
+How: checks:
+	•	permissions match spec
+	•	no forbidden syscalls/patterns (best-effort)
+	•	supply-chain integrity (hashes, signatures)
+	•	diff review requirements
+
+Output: risk report.
+
+⸻
+
+5) The V4 Self-Improvement Workflow
+
+This is the core of “it improves itself” without becoming unsafe.
+
+Step 0 — Observe
+	•	diag reads trce + mem + judge results
+	•	finds pain points:
+	•	too many retries
+	•	patch failures
+	•	slow context packing
+	•	repeated manual approvals
+	•	high token costs
+
+Step 1 — Propose
+	•	self generates a proposal:
+	•	“We need a better context deduper”
+	•	“We need a tool to extract env vars more reliably”
+	•	“We need a playbook for CI failures in Go”
+	•	outputs acceptance criteria.
+
+Step 2 — Spec first
+	•	spec writes a tool spec artifact.
+	•	This becomes the “contract” the tool must satisfy.
+
+Step 3 — Forge (build candidate)
+	•	forge generates candidate tool package:
+	•	code, tests, manifest
+	•	stores it as an artifact reference.
+
+Step 4 — Test in isolation
+	•	test runs unit tests + schema conformance tests.
+	•	audit checks permissions and risk.
+
+Step 5 — Benchmark and evaluate
+	•	bench runs targeted benchmarks (latency/cost).
+	•	judge runs a small eval suite:
+	•	does the new tool improve real tasks?
+
+Step 6 — Gate + approve
+	•	gate checks all acceptance criteria.
+	•	if risk high → aprv required.
+
+Step 7 — Promote
+	•	prom installs new tool version into toolspace
+	•	updates registry (hash pinned)
+	•	records full trace + decision
+
+Step 8 — Rollback ready
+	•	if regressions show up → roll reverts to last good version
+
+That’s self-improvement with safety.
+
+⸻
+
+6) What “tool creation for itself” means in practice
+
+A V4 “tool” it might invent could be like:
+	•	envy — better env var extractor than regex
+	•	apid — parse OpenAPI or route definitions
+	•	deps — dependency risk scanner
+	•	lint — repo-specific lint runner normalizer
+	•	fuzz — generate small tests for suspicious functions
+	•	sect — detect secrets in diffs better than grep
+
+All of these are userland tools that are safe to create and replace.
+
+⸻
+
+7) How it can self-analyze its own code
+
+You treat Clock’s own repo like any other repo, but with strict policies:
+	•	core/kernel changes always require approval
+	•	toolspace changes can be auto-promoted if low risk
+	•	tests must pass + bench must be clean
+
+Self-analysis sources:
+	•	trce (what’s slow, brittle)
+	•	judge (what fails)
+	•	ablt (what configuration works best)
+	•	mem/knox (what patterns repeat)
+
+⸻
+
+8) The key safety model (the constitution)
+
+Separation of powers
+	•	The agent can propose.
+	•	The kernel enforces.
+	•	Promotion requires gates (and sometimes humans).
+
+Signed artifacts
+
+Every promoted tool version is:
+	•	content-addressed (hash)
+	•	registry-pinned
+	•	optionally signed by you (or by an allowlisted key)
+
+Capability-based permissions
+
+Each tool gets a capability set:
+	•	read:repo
+	•	write:repo
+	•	run:cmd
+	•	net:outbound
+	•	etc.
+
+And the kernel prevents tools from exceeding them.
+
+⸻
+
+9) What makes V4 “real” instead of sci-fi
+
+The system is not “magically smarter.”
+
+It’s just:
+	•	observability
+	•	spec-first tool contracts
+	•	safe build/test/bench gates
+	•	versioned tool registry
+	•	rollback
+	•	evaluation harness
+
+That’s exactly how real software improves—just automated.
+
+⸻
+
+Below is a V4 Markdown specification written in the same style as the previous toolbox docs.
+It introduces self-analysis and self-tool-creation while keeping:
+	•	Unix philosophy
+	•	tiny tools
+	•	stdin → stdout
+	•	JSON / JSONL
+	•	immutable kernel
+	•	governed self-modification
+
+Tool names follow your rule: single word, 3–5 letters, no dashes.
+
+⸻
+
+Clock V4 — Self-Improving System
+
+Clock V4 introduces the ability for the system to:
+	•	analyze its own behavior
+	•	propose improvements
+	•	generate new tools
+	•	test and benchmark those tools
+	•	promote successful tools into the toolbox
+
+while keeping a small immutable kernel that prevents unsafe self-modification.
+
+⸻
+
+V4 Architecture
+
+Clock V4 divides the system into two layers.
+
+Immutable Kernel
+
+The kernel is the trusted computing base.
+
+It enforces:
+	•	tool protocol
+	•	permissions
+	•	patch safety
+	•	execution sandbox
+	•	artifact hashing
+	•	trace logging
+	•	version registry
+
+The kernel never rewrites itself directly.
+
+All changes must go through the self-improvement pipeline.
+
+⸻
+
+Mutable Toolspace
+
+Everything outside the kernel lives in toolspace.
+
+Examples:
+	•	retrieval tools
+	•	analysis tools
+	•	repo utilities
+	•	swarm orchestration
+	•	playbooks
+	•	new tools generated by the system
+
+These tools are versioned and stored in:
+
+.clock/tools/
+
+Each tool has a manifest describing:
+	•	version
+	•	permissions
+	•	input schema
+	•	output schema
+	•	hash
+	•	tests
+
+⸻
+
+Tool Index
+
+V1 Core Toolbox
+
+scan scope srch slce pack map ctrt flow doss rfrsh
+llm act guard aply vrfy undo rpt
+
+V1 Go Microtools
+
+jolt budg anch risk exec dect graf trce mcp
+
+V2 Autonomous Tools
+
+dock tick watch q job work mem eval aprv push lease mode
+
+V3 Distributed / Swarm Tools
+
+swrm role hub shrd knox link note pbk rank judge ablt repl farm sync orch
+
+V4 Self-Improvement Tools
+
+self diag spec forge test bench gate prom roll audit
+
+
+⸻
+
+V4 Self-Improvement Tools
+
+These tools allow Clock to evolve its capabilities.
+
+⸻
+
+self
+
+Purpose
+
+Self-analysis entry point.
+
+Goal
+
+Allow the system to reason about how it could improve.
+
+How it works
+
+Analyzes system traces, failures, slow operations, and repetitive work.
+
+Produces improvement proposals.
+
+Examples:
+	•	new microtool
+	•	better retrieval method
+	•	improved context packing
+	•	new playbook
+
+Input
+
+{
+  "goal": "improve retrieval accuracy"
+}
+
+Output
+
+{
+  "proposal": {
+    "type": "tool",
+    "name": "envy",
+    "reason": "environment variables often missed",
+    "criteria": ["detect env vars", "support 5 languages"]
+  }
+}
+
+
+⸻
+
+diag
+
+Purpose
+
+System diagnostics.
+
+Goal
+
+Identify weaknesses in the system.
+
+How it works
+
+Analyzes:
+	•	trace logs
+	•	job outcomes
+	•	token usage
+	•	retry rates
+	•	slow tools
+
+Input
+
+{
+  "source": ".clock/trce.jsonl"
+}
+
+Output
+
+{
+  "issues": [
+    { "tool": "pack", "problem": "slow context packing" }
+  ]
+}
+
+
+⸻
+
+spec
+
+Purpose
+
+Tool specification generator.
+
+Goal
+
+Define a new tool in a structured way before implementation.
+
+How it works
+
+Produces a machine-readable contract for the tool.
+
+Input
+
+{
+  "name": "envy",
+  "goal": "extract environment variables",
+  "io": "json"
+}
+
+Output
+
+{
+  "tool": "envy",
+  "inputs": { "paths": "array" },
+  "outputs": { "vars": "array" },
+  "permissions": ["read"]
+}
+
+
+⸻
+
+forge
+
+Purpose
+
+Tool builder.
+
+Goal
+
+Generate candidate tool implementations.
+
+How it works
+
+Creates a buildable artifact bundle.
+
+Contents include:
+	•	source code
+	•	tests
+	•	manifest
+	•	build instructions
+
+Input
+
+Tool spec.
+
+Output
+
+Artifact reference.
+
+{
+  "artifact": "sha256:abc123..."
+}
+
+
+⸻
+
+test
+
+Purpose
+
+Tool test runner.
+
+Goal
+
+Verify tool correctness.
+
+How it works
+
+Runs:
+	•	unit tests
+	•	schema validation
+	•	input/output conformance
+
+Input
+
+Artifact reference.
+
+Output
+
+{
+  "passed": true,
+  "tests": 18
+}
+
+
+⸻
+
+bench
+
+Purpose
+
+Performance benchmark.
+
+Goal
+
+Compare candidate tool with existing ones.
+
+How it works
+
+Measures:
+	•	latency
+	•	memory
+	•	token cost
+	•	accuracy
+
+Input
+
+{
+  "candidate": "...",
+  "baseline": "srch"
+}
+
+Output
+
+{
+  "winner": "candidate",
+  "speedup": 1.7
+}
+
+
+⸻
+
+gate
+
+Purpose
+
+Promotion gate.
+
+Goal
+
+Ensure only safe improvements enter the system.
+
+How it works
+
+Checks:
+	•	tests pass
+	•	benchmarks acceptable
+	•	security checks passed
+	•	policy compliance
+
+Input
+
+Candidate artifact.
+
+Output
+
+{
+  "approved": true
+}
+
+
+⸻
+
+prom
+
+Purpose
+
+Tool promotion.
+
+Goal
+
+Install a new tool into the registry.
+
+How it works
+	•	copies artifact into toolspace
+	•	updates registry
+	•	pins version hash
+
+Input
+
+Artifact reference.
+
+Output
+
+{
+  "tool": "envy",
+  "version": "1.0"
+}
+
+
+⸻
+
+roll
+
+Purpose
+
+Rollback.
+
+Goal
+
+Restore previous tool versions.
+
+How it works
+
+Reverts registry state.
+
+Input
+
+{
+  "tool": "envy",
+  "version": "0.9"
+}
+
+Output
+
+{
+  "restored": true
+}
+
+
+⸻
+
+audit
+
+Purpose
+
+Security audit.
+
+Goal
+
+Prevent unsafe or malicious tools.
+
+How it works
+
+Checks:
+	•	permissions
+	•	system calls
+	•	suspicious code patterns
+	•	hash integrity
+
+Input
+
+Artifact.
+
+Output
+
+{
+  "risk": "low"
+}
+
+
+⸻
+
+V4 Self-Improvement Workflow
+
+The following pipeline allows Clock to safely create and adopt new tools.
+
+⸻
+
+Step 1 — Observe
+
+System analyzes itself.
+
+diag → identify weaknesses
+
+Example issues:
+	•	context retrieval slow
+	•	repeated patch failures
+	•	frequent CI fixes
+
+⸻
+
+Step 2 — Propose
+
+Clock generates improvement ideas.
+
+self → proposal
+
+Example:
+
+new tool for env variable extraction
+
+
+⸻
+
+Step 3 — Define
+
+Proposal becomes a structured tool definition.
+
+spec → tool contract
+
+
+⸻
+
+Step 4 — Build
+
+Candidate implementation is generated.
+
+forge → artifact bundle
+
+
+⸻
+
+Step 5 — Validate
+
+Candidate tool is validated.
+
+test → correctness
+audit → security
+bench → performance
+
+
+⸻
+
+Step 6 — Gate
+
+System verifies acceptance criteria.
+
+gate → approve or reject
+
+If risk is high:
+
+aprv → human approval required
+
+
+⸻
+
+Step 7 — Promote
+
+Approved tools become part of the toolbox.
+
+prom → registry update
+
+
+⸻
+
+Step 8 — Rollback (if necessary)
+
+If problems appear:
+
+roll → revert tool version
+
+
+⸻
+
+V4 Architecture Diagram
+
+          diag
+           │
+          self
+           │
+          spec
+           │
+          forge
+           │
+      test / audit
+           │
+          bench
+           │
+          gate
+           │
+         aprv
+           │
+          prom
+           │
+        toolspace
+           │
+         workers
+           │
+          trce
+
+
+⸻
+
+Safety Model
+
+Clock V4 follows strict governance.
+
+Immutable kernel
+
+Core logic cannot be modified automatically.
+
+Tool contracts
+
+Every tool must declare:
+	•	inputs
+	•	outputs
+	•	permissions
+
+Artifact hashing
+
+All tools are content-addressed.
+
+Promotion gates
+
+No tool enters the system without passing tests and audits.
+
+Rollback guarantee
+
+All versions remain reversible.
+
+⸻
+
+Result
+
+Clock V4 becomes a self-improving engineering system capable of:
+	•	inventing new tools
+	•	optimizing its workflows
+	•	adapting to new repositories
+	•	learning from past successes
+	•	evolving safely over time
+
+while still preserving:
+	•	Unix composability
+	•	small inspectable programs
+	•	strict safety boundaries
+
+⸻

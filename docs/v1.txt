@@ -1,0 +1,475 @@
+Below is a ready-to-drop Markdown spec for the entire toolbox, using single-word tool names (3–5 chars, no dashes). It includes: name → purpose/goal → how → inputs/outputs, then the Go microtools list, then the Clock workflow.
+
+⸻
+
+Clock Toolbox
+
+This document defines the complete Unix-style toolbox that powers Clock.
+Each tool is a small program that:
+	•	does one job
+	•	communicates via stdin → stdout
+	•	uses explicit inputs/outputs (prefer JSON or JSONL)
+	•	keeps state only in explicit files under .clock/ (when needed)
+
+Conventions
+	•	JSON: one JSON object (recommended for configs and bundles)
+	•	JSONL: one JSON object per line (recommended for streams like search hits)
+	•	Paths are relative to repo root unless stated otherwise.
+	•	Slices are line-based (1-indexed).
+
+⸻
+
+Tool Index
+
+Core toolbox (Unix toolbox)
+	•	scan scope srch slce pack
+	•	map ctrt flow doss rfrsh
+	•	llm act guard aply vrfy undo rpt
+
+Go microtools (missing primitives)
+	•	jolt budg anch risk exec dect graf trce mcp
+
+⸻
+
+Core toolbox
+
+scan
+
+What it does: Repo facts & runnable commands discovery.
+Goal: Detect how the repo is built/tested/linted and what ecosystems exist.
+How: Inspect filesystem + common config files + git metadata; infer likely commands.
+
+Input:
+	•	JSON config (optional): { "root": ".", "deep": false }
+
+Output (JSON):
+	•	repo root, languages (rough), package managers detected
+	•	candidate commands: format/lint/test/build
+	•	key files: package.json, pyproject.toml, go.mod, Makefile, CI configs
+
+⸻
+
+scope
+
+What it does: Define the workset (in-bounds files).
+Goal: Prevent scanning the whole repo; keep actions constrained.
+How: Use git-tracked files plus include/exclude rules.
+
+Input (JSON):
+	•	{ "include": ["...globs"], "exclude": ["...globs"], "mode": "tracked|all", "limit": 5000 }
+
+Output (JSONL):
+	•	one line per file: { "path": "src/foo.ts" }
+
+⸻
+
+srch
+
+What it does: Fast code search with ranking.
+Goal: Find likely relevant locations for a goal/question.
+How: Run ripgrep; compute lightweight ranking (match count, proximity, file weight).
+
+Input (JSON):
+	•	{ "q": "search string or regex", "paths": ["..."], "glob": ["..."], "max": 200 }
+
+Output (JSONL):
+	•	{ "path": "...", "line": 123, "col": 9, "text": "...", "score": 0.87 }
+
+⸻
+
+slce
+
+What it does: Deterministic excerpt extraction by line ranges.
+Goal: Provide tight, verifiable context windows for the model.
+How: Read exact file segments; optionally expand to include a little surrounding context.
+
+Input (JSON):
+	•	{ "path": "...", "start": 100, "end": 160, "pad": 20 }
+
+Output (JSON):
+	•	{ "path": "...", "start": 80, "end": 180, "text": "..." }
+
+⸻
+
+pack
+
+What it does: Context packer (micro + macro).
+Goal: Build the smallest prompt bundle that still enables correct action.
+How: Combine dossier (macro) + selected slices (micro); dedupe; enforce size limits.
+
+Input (JSON):
+	•	{ "goal": "...", "doss": ".clock/doss.md", "slices": [ ... ], "max_bytes": 120000 }
+
+Output (JSON):
+	•	{ "system": "...", "messages": [...], "tools": [...], "policy": {...}, "citations": [...] }
+
+⸻
+
+Macro-context tools
+
+map
+
+What it does: Repo structure & entrypoints mapper.
+Goal: Produce a high-level “shape of the codebase” without reading everything.
+How: Tree summary, key directories, entrypoints, configs, and “hot spots.”
+
+Input (JSON):
+	•	{ "paths": ["..."], "max_depth": 6, "max_files": 20000 }
+
+Output (JSON):
+	•	directory outline
+	•	key files list (entrypoints/configs)
+	•	“hot spots” (big files, frequently changed files if git available)
+
+⸻
+
+ctrt
+
+What it does: Contracts extractor (APIs, schemas, CLIs, env vars).
+Goal: Capture boundaries/invariants the agent must not break.
+How: Pattern-based extraction + repo heuristics (exports, routes, flags, config keys).
+
+Input (JSON):
+	•	{ "paths": ["..."], "langs": ["...optional"], "max": 2000 }
+
+Output (JSON):
+	•	{ "exports": [...], "routes": [...], "cli": [...], "env": [...], "schemas": [...] }
+
+⸻
+
+flow
+
+What it does: Data flow & side effects map.
+Goal: Explain how the system behaves end-to-end (what calls what, where side effects happen).
+How: Use map + ctrt + targeted searches to infer pipelines and boundaries.
+
+Input (JSON):
+	•	{ "map": {...}, "ctrt": {...}, "focus": ["...optional modules"] }
+
+Output (JSON):
+	•	{ "pipelines": [...], "edges": [...], "sidefx": [...], "notes": "..." }
+
+⸻
+
+doss
+
+What it does: Macro brief compiler (dossier).
+Goal: Produce a compact “project mental model” for the model to use every turn.
+How: Summarize map/contracts/flow into stable, small artifacts.
+
+Input (JSON):
+	•	{ "map": {...}, "ctrt": {...}, "flow": {...}, "max_bytes": 40000 }
+
+Output:
+	•	Markdown on stdout (primary)
+	•	Optional JSON on stdout when format=json
+
+Key sections include:
+	•	overview + module roles
+	•	invariants/contracts summary
+	•	safe vs risky zones
+	•	how to run checks (from scan)
+	•	operational notes
+
+⸻
+
+rfrsh
+
+What it does: Dossier refresh trigger.
+Goal: Keep macro-context accurate as code changes.
+How: Compare git diff / file timestamps to thresholds; rebuild dossier when stale.
+
+Input (JSON):
+	•	{ "root": ".", "diff_limit": 30, "age_min": 1440, "force": false }
+
+Output (JSON):
+	•	{ "stale": true|false, "reason": "...", "did": ["map","ctrt","flow","doss"] }
+
+⸻
+
+Agent loop tools
+
+llm
+
+What it does: LLM API filter.
+Goal: Turn prompt bundle JSON into a strict JSON response.
+How: Call provider API; enforce schema; retry on invalid JSON.
+
+Input (JSON):
+	•	{ "provider": "anthropic|openai|...", "model": "...", "bundle": {...} }
+
+Output (JSON):
+	•	A single action envelope, e.g.
+	•	{ "kind": "tool", "name": "srch", "args": {...}, "why": "..." }
+	•	{ "kind": "patch", "diff": "...", "why": "..." }
+	•	{ "kind": "done", "answer": "...", "why": "..." }
+
+⸻
+
+act
+
+What it does: Action grammar enforcer / dispatcher intent parser.
+Goal: Prevent freestyle output; normalize into a single executable step.
+How: Validate the llm envelope; reject if ambiguous; produce normalized action.
+
+Input (JSON):
+	•	LLM envelope from llm
+
+Output (JSON):
+	•	{ "kind": "srch|slce|patch|run|done", "payload": {...} }
+
+⸻
+
+guard
+
+What it does: Diff validator.
+Goal: Make edits safe before touching disk.
+How: Apply policies: max files/lines, forbidden paths, require context lines, deny binary, etc.
+
+Input (JSON):
+	•	{ "diff": "...unified...", "policy": {...} }
+
+Output (JSON):
+	•	{ "ok": true|false, "risk": 0.0-1.0, "reasons": [...], "needs": ["vrfy:full"] }
+
+⸻
+
+aply
+
+What it does: Atomic patch application.
+Goal: Apply changes reliably and be able to undo instantly.
+How: Create checkpoint; apply diff; emit change summary; refuse on conflict.
+
+Input (JSON):
+	•	{ "diff": "...", "checkpoint": "auto|stash|commit", "msg": "..." }
+
+Output (JSON):
+	•	{ "ok": true|false, "chk": "id", "files": [...], "lines": { "add": n, "del": n }, "err": "..." }
+
+⸻
+
+vrfy
+
+What it does: Run checks.
+Goal: Confirm the repo still works; catch breakage early.
+How: Use commands detected by scan or user-provided verify plan; capture logs.
+
+Input (JSON):
+	•	{ "plan": ["fmt","lint","test"], "cmds": ["...optional override..."], "timeout": 900 }
+
+Output (JSON):
+	•	{ "ok": true|false, "steps": [...], "fail": {...}, "logs": "...truncated..." }
+
+⸻
+
+undo
+
+What it does: Revert to checkpoint.
+Goal: Guarantee safe experimentation.
+How: Restore from stash/commit/checkpoint ID created by aply.
+
+Input (JSON):
+	•	{ "chk": "id" }
+
+Output (JSON):
+	•	{ "ok": true|false, "did": "restore", "err": "..." }
+
+⸻
+
+rpt
+
+What it does: Human-readable summary.
+Goal: Explain what changed, why, and how it was verified.
+How: Combine goal + diffs + verify results + citations into a clean report.
+
+Input (JSON):
+	•	{ "goal": "...", "diffsum": {...}, "vrfy": {...}, "cites": [...] }
+
+Output (Markdown):
+	•	Summary, files changed, rationale, verification, next steps
+
+⸻
+
+Go microtools
+
+These are additional single-purpose tools implemented in Go to fill gaps where pure Unix tooling is clumsy: JSON streaming, context budgeting, resilient patching, safer execution, graphs, tracing, and ecosystem bridges.
+
+jolt
+
+What it does: Streaming JSON/JSONL plumbing.
+Goal: Make JSONL pipelines as easy as awk for text.
+How: Pick/merge/join/filter/validate/redact JSON objects at high speed.
+
+Input: JSONL on stdin + flags (operation + selectors)
+Output: JSONL on stdout
+
+⸻
+
+budg
+
+What it does: Hard context budgeting and packing.
+Goal: Fit the best evidence into a strict max size (bytes/tokens estimate).
+How: Rank + dedupe + compress; guarantee budget compliance; keep citations.
+
+Input (JSONL):
+	•	candidate snippets {path,start,end,text,score} + constraints
+Output (JSON):
+	•	packed snippet set + stats {used_bytes, dropped, rationale}
+
+⸻
+
+anch
+
+What it does: Resilient patch anchoring.
+Goal: Apply diffs even when lines drift, without risking wrong edits.
+How: Re-anchor hunks using nearby unique anchors; refuse on ambiguity.
+
+Input (JSON):
+	•	{ "diff": "...", "policy": {...} }
+Output (JSON):
+	•	{ "ok": true|false, "rebased": true|false, "diff2": "...optional...", "why": "..." }
+
+⸻
+
+risk
+
+What it does: Change risk scoring.
+Goal: Decide how strict verification must be.
+How: Score diffs by touched zones (from dossier), file types, hunk size, test impact.
+
+Input (JSON):
+	•	{ "diff": "...", "doss": "...", "hist": "...optional..." }
+Output (JSON):
+	•	{ "risk": 0.0-1.0, "class": "low|med|high", "must": ["vrfy:full"], "why": [...] }
+
+⸻
+
+exec
+
+What it does: Policy-based command runner (sandbox-ish).
+Goal: Safe, structured command execution with timeouts and env scrubbing.
+How: Enforce allowlist; restrict cwd; scrub env; kill process tree; truncate logs.
+
+Input (JSON):
+	•	{ "cmd": ["..."], "cwd": ".", "timeout": 120, "allow": {...} }
+Output (JSON):
+	•	{ "code": 0, "out": "...", "err": "...", "ms": 1234 }
+
+⸻
+
+dect
+
+What it does: Repo capability detection.
+Goal: Autoconfigure verify plans across unknown repos.
+How: Detect scripts, toolchains, monorepo layout, CI hints, and recommend a plan.
+
+Input (JSON):
+	•	{ "root": "." }
+Output (JSON):
+	•	{ "fmt": [...], "lint": [...], "test": [...], "build": [...], "notes": [...] }
+
+⸻
+
+graf
+
+What it does: Lightweight import/call graph.
+Goal: Provide “system understanding” without full AST infrastructure.
+How: Fast parsing or heuristics per language; output edges and symbol index.
+
+Input (JSON):
+	•	{ "paths": ["..."], "mode": "imports|symbols|both" }
+Output (JSON):
+	•	{ "nodes": [...], "edges": [...], "index": {...} }
+
+⸻
+
+trce
+
+What it does: Append-only trace log + replay metadata.
+Goal: Make agent runs debuggable, reproducible, and auditable.
+How: Write JSONL events: tool calls, outputs (truncated), timings, checkpoints.
+
+Input (JSON):
+	•	{ "event": "tool.call|tool.out|llm.in|llm.out", "data": {...} }
+Output: JSONL appended (and echo to stdout when desired)
+
+⸻
+
+mcp
+
+What it does: MCP bridge (optional).
+Goal: Plug Clock tools into external tool ecosystems and vice versa.
+How: Expose local tools as MCP endpoints, or consume MCP tools as local commands.
+
+Input/Output: depends on MCP framing; always wraps in JSON envelopes
+
+⸻
+
+Clock workflow
+
+Clock is the CLI wrapper that orchestrates the toolbox. It does not “do” the work; it composes tools.
+
+Initialization flow (clock init)
+	1.	scan → discover repo commands and environment.
+	2.	scope → build default workset (respect ignores).
+	3.	Build macro-context:
+	•	map + ctrt + flow → doss
+	4.	Write artifacts under .clock/:
+	•	.clock/doss.md (macro brief)
+	•	.clock/policy.json (edit and run policies)
+	•	.clock/trace.jsonl (optional; empty start)
+
+Read-only analysis flow (clock ask)
+	1.	rfrsh checks if dossier is stale; if stale, rebuild via map/ctrt/flow/doss.
+	2.	scope selects relevant bounds (user may specify folder/module).
+	3.	srch finds relevant locations (if question implies code).
+	4.	slce extracts only the needed context.
+	5.	pack builds the prompt bundle (dossier + slices).
+	6.	llm returns a done response (no edits) with citations.
+	7.	rpt prints the answer.
+
+Change flow (clock fix)
+
+This is the full agent loop.
+
+Step A: Prepare
+	1.	rfrsh → ensure dossier current.
+	2.	scope → define workset.
+	3.	scan (and optionally dect) → decide default verify plan.
+	4.	trce logs the goal and initial repo status.
+
+Step B: Iterate
+
+Loop until done:
+	1.	Retrieve
+	•	srch → get ranked hits
+	•	slce → pull minimal slices
+	•	pack → build prompt bundle (macro + micro)
+	2.	Decide
+	•	llm → proposes next action (search/slice/patch/run/done)
+	•	act → validates and normalizes action
+	3.	If action is search/slice
+	•	run srch/slce accordingly and continue loop
+	4.	If action is patch
+	•	guard (and optionally risk) validates the diff and sets strictness
+	•	aply creates checkpoint and applies patch (or anch first if you want rebasing)
+	•	vrfy runs checks (strictness based on risk/policy)
+	•	if verify fails → undo rollback → feed failure logs into next pack call
+	5.	If action is run
+	•	run via exec (policy enforced) or vrfy if it maps to verification
+	6.	trce records each call/result, including checkpoint IDs.
+
+Step C: Finish
+	1.	When llm returns done, Clock:
+	•	gathers git diff summary
+	•	gathers verify results
+	•	emits rpt (what changed, why, verification, next steps)
+
+Key safety invariants
+	•	The only write path is: patch → guard → aply
+	•	Every apply creates a checkpoint.
+	•	Every patch is followed by vrfy.
+	•	Failures trigger automatic undo.
+	•	All actions are traceable via trce.
+
+⸻

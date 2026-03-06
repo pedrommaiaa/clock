@@ -1,0 +1,176 @@
+Best deal: one Go binary for the “hard primitives,” shell for glue, and reuse native Unix tools whenever possible. Think of it as a 3-tier toolbox:
+	1.	Tier A: Existing Unix tools (no code)
+	2.	Tier B: Shell scripts (very small glue / wiring)
+	3.	Tier C: Go micro-binaries (where you need speed, correctness, portability, and structured I/O)
+
+You don’t want everything to be Go. You want only the parts that benefit to be Go.
+
+Rule of thumb
+
+Make a tool a Go binary when it needs any of these:
+	•	structured JSON/JSONL streaming (beyond what jq can comfortably do)
+	•	concurrency (parallel search/slicing, worker pools, timeouts)
+	•	robust process control (kill trees, resource limits, sandboxing)
+	•	non-trivial parsing (graphs, contracts, import maps)
+	•	durable storage (sqlite queue/memory/graph)
+	•	cross-platform reliability (macOS/Linux consistent behavior)
+	•	performance-critical hot path (called constantly)
+
+Make a tool a shell script when it:
+	•	is basically a pipeline of existing commands (rg, git, sed, awk)
+	•	has simple branching / heuristics
+	•	you want maximum hackability
+	•	it’s not called in tight loops 1,000× per run
+
+And lean on existing Unix tools whenever they already do it best.
+
+⸻
+
+Recommended language per tool (V1 → V4)
+
+V1 Core Toolbox
+
+Go binaries (worth it)
+	•	llm: API client + strict JSON enforcement + retries
+	•	act: schema validation + normalization (fast, strict)
+	•	guard: diff parsing + policy checks (robust)
+	•	aply: atomic apply + checkpoint mgmt (less footguns)
+	•	vrfy (optional Go): structured capture + timeouts; OR shell if simple
+	•	rfrsh: staleness checks + orchestration (small but nice in Go)
+
+Shell / Unix (best as scripts)
+	•	scan: mostly “detect files / infer commands” using ls/find/rg/git
+	•	scope: mostly git ls-files + filters
+	•	srch: just call rg (shell wrapper if you need JSONL output)
+	•	slce: sed/awk for slices (tiny shell)
+	•	pack: depends:
+	•	shell if it’s simple concatenation + truncation
+	•	Go if you want real budgeting + dedupe + stable ordering
+	•	map/ctrt/flow/doss: start as shell + rg heuristics, then move to Go when you want quality and speed (see V3)
+
+Practical note: make srch and slce wrappers that output JSONL/JSON, but do the heavy lifting with rg/sed.
+
+⸻
+
+V1 Go Microtools (these should be Go)
+
+These exist specifically because Unix tools are clunky here.
+	•	jolt (JSONL plumbing) → Go
+	•	budg (budgeting/packing) → Go
+	•	anch (resilient patch apply) → Go
+	•	risk (risk scoring) → Go
+	•	exec (sandbox runner) → Go
+	•	dect (repo capability detection) → Go
+	•	graf (graph-lite) → Go (or use ctags as external dep)
+	•	trce (trace writer) → Go (fast, safe, consistent)
+	•	mcp (protocol bridge) → Go
+
+These are your “power primitives.” Make them tight and fast.
+
+⸻
+
+V2 Autonomous Tools
+
+Must be Go
+	•	dock daemon supervisor (process lifecycle, concurrency)
+	•	q durable queue (sqlite or file-spool with leases)
+	•	work worker executor (job lifecycle, retries, timeouts)
+	•	lease resource governor (rate limits, budgets)
+	•	push notifier (webhooks, GH API, formatting)
+	•	mem durable store (sqlite)
+	•	eval gating engine (policy + scoring)
+	•	mode policy mode enforcement (tiny, but belongs in Go with eval)
+
+Can be shell (if you keep it simple)
+	•	tick: you can use system cron/systemd timers and just enqueue into q
+	•	watch: depends:
+	•	simplest: shell polling (git fetch, parse CI logs) + enqueue
+	•	better: Go (file watchers, webhooks, backoff, jitter)
+
+job
+	•	start shell (rules as simple JSON + jq)
+	•	move to Go when rules get complex (routing, priorities, templates)
+
+⸻
+
+V3 Distributed / Swarm Tools
+
+Go (almost all)
+	•	hub message bus (or reuse NATS/Redis; but the interface tool is Go)
+	•	shrd artifact store (content-addressed, hashing)
+	•	knox graph store (sqlite + graph layer)
+	•	link evidence linking (parsing + citations)
+	•	judge eval harness (runs, scoring, parallelism)
+	•	ablt ablation runner (experiment mgmt)
+	•	repl replay engine (deterministic pipeline)
+	•	farm distributed worker leasing
+	•	sync state replication
+	•	orch campaign orchestrator
+	•	swrm swarm coordinator
+	•	role role/policy loader (could be shell, but Go keeps it strict/fast)
+	•	rank retrieval ranking (Go if it uses stats/history)
+	•	pbk playbook generator (Go if it parses traces + learns patterns)
+	•	note could be shell (templated summaries), but Go if you want robust formatting
+
+Shortcut: whenever the tool touches networking, concurrency, storage, or parsing, Go wins.
+
+⸻
+
+V4 Self-Improvement Tools
+
+Go
+	•	diag (trace analytics, statistics)
+	•	bench (benchmark harness)
+	•	gate (promotion gatekeeper, policy enforcement)
+	•	prom (registry updates, installs, pinning)
+	•	roll (rollback)
+	•	audit (security checks, hashing, rule engine)
+
+Mixed (shell + Go)
+	•	test: often just runs commands → shell wrapper around exec
+	•	spec: can be shell if it’s templating; Go if it enforces schemas strongly
+	•	self: mostly orchestration (calls diag + llm) → could be shell, but Go is nicer for strictness
+
+Special case: forge
+
+If forge is “generate code,” you’ll likely keep it in Go for packaging + artifact creation, but the actual generation step can be:
+	•	LLM call via llm
+	•	then audit/test/bench
+
+So forge is mostly a packager.
+
+⸻
+
+The smallest-fastest setup I’d recommend
+
+Use these building blocks:
+	•	Go binaries for anything “core primitive”
+	•	Shell scripts for thin wrappers around rg/git/sed
+	•	External deps for best-in-class utilities
+
+Keep the system fast by:
+	•	minimizing process spawns in tight loops (Go helps here)
+	•	using rg for search (don’t replace it)
+	•	using sqlite for queues/memory (fast, durable)
+	•	content-address artifacts (shrd) to avoid recomputation
+	•	caching dossiers and repo fingerprints
+
+⸻
+
+Packaging recommendation
+	•	Go binaries: ship in one clock release bundle
+	•	Shell tools: ship as plain scripts, installed alongside binaries
+	•	External deps: document them + have clock doctor verify presence
+
+⸻
+
+A clean decision policy
+
+When you add a new tool, decide by answering:
+	1.	Is it hot path (runs many times per job)? → Go
+	2.	Does it need JSONL manipulation beyond trivial? → Go
+	3.	Does it touch network/storage/concurrency? → Go
+	4.	Is it just rg | sed | awk | jq with minor glue? → shell
+	5.	Can an existing Unix tool already do it perfectly? → don’t write anything
+
+That keeps everything small + fast and prevents “Go everywhere” bloat.
