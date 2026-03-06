@@ -864,7 +864,11 @@ func cmdChat() {
 	if err != nil {
 		fatal("chat tool not found — run 'make all' to build it")
 	}
-	cmd := exec.Command(chatBin, os.Args[2:]...)
+	var args []string
+	if len(os.Args) > 2 {
+		args = os.Args[2:]
+	}
+	cmd := exec.Command(chatBin, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
